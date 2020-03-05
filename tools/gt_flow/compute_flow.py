@@ -1,8 +1,9 @@
 """ Computes optical flow from two poses and depth images """
 
+import cv2
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from scipy.linalg import logm
@@ -121,7 +122,7 @@ class Flow:
         """
         flat_depth = depth_image.ravel()
         # flat_depth[np.logical_or(np.isclose(flat_depth,0.0), flat_depth<0.)]
-        mask = np.isfinite(flat_depth)
+        mask = np.logical_and(np.isfinite(flat_depth), ~np.isclose(flat_depth, 0.0))
 
         fdm = 1./flat_depth[mask]
         fxm = self.flat_x_map[mask]
@@ -335,7 +336,7 @@ def experiment_flow(experiment_name, experiment_num, save_movie=True, save_numpy
                  lin_vel=smoothed_Vs, ang_vel=smoothed_Omegas, pos=ps, quat=qs)
 
     if save_movie:
-        print "Saving movie"
+        print("Saving movie")
         import matplotlib.animation as animation
         plt.close('all')
    
@@ -351,6 +352,58 @@ def experiment_flow(experiment_name, experiment_num, save_movie=True, save_numpy
         movie_path = base_name+"_gt_flow.mp4"
         ani.save(movie_path, fps=20)
         plt.show()
+
+    print("Showing overlay")
+    Pfx = cal.intrinsic_extrinsic['cam0']['projection_matrix'][0][0]
+    Ppx = cal.intrinsic_extrinsic['cam0']['projection_matrix'][0][2]
+    Pfy = cal.intrinsic_extrinsic['cam0']['projection_matrix'][1][1]
+    Ppy = cal.intrinsic_extrinsic['cam0']['projection_matrix'][1][2]
+
+    intrinsics = cal.intrinsic_extrinsic['cam0']['intrinsics']
+    P = np.array([[Pfx, 0., Ppx],
+                  [0. , Pfy, Ppy],
+                  [0., 0., 1.]])
+
+    K = np.array([[intrinsics[0], 0., intrinsics[2]],
+                  [0., intrinsics[1], intrinsics[3]],
+                  [0., 0., 1.]])
+                  
+    distortion_coeffs = np.array(cal.intrinsic_extrinsic['cam0']['distortion_coeffs'])
+
+    # Compute distortion mapping
+    map_x, map_y = cv2.fisheye.initUndistortRectifyMap(K,
+                                distortion_coeffs,
+                                np.array(cal.intrinsic_extrinsic['cam0']['rectification_matrix']),
+                                P,
+                                (cal.intrinsic_extrinsic['cam0']['resolution'][0], cal.intrinsic_extrinsic['cam0']['resolution'][1]),
+                                cv2.CV_32FC1)
+
+    import raw_data
+    data = raw_data.RawData(experiment_name, experiment_num)
+    for frame_num in range(len(data.left_cam_readers['/davis/left/image_raw'])):
+        image = data.left_cam_readers['/davis/left/image_raw'][frame_num]
+        image.acquire()
+        print("time", image.header.stamp.to_sec())
+        # find index of nearest depth image
+        ind = np.searchsorted(timestamps, image.header.stamp.to_sec(), side='right')
+        print(ind)
+        if ind > 0 and abs(timestamps[ind-1] - image.header.stamp.to_sec()) < abs(timestamps[ind] - image.header.stamp.to_sec()):
+            ind -= 1
+        elif ind >= len(timestamps):
+            ind = -1
+        print(ind, timestamps[ind])
+
+        plt.figure(1); plt.imshow(x_flow_dist[ind]); plt.title('flow_x @ time: %f' % timestamps[ind])
+        plt.figure(2); plt.imshow(y_flow_dist[ind]); plt.title('flow_y @ time: %f' % timestamps[ind])
+        plt.figure(3); plt.imshow(image.img, cmap='gray', vmin=0, vmax=255); plt.title('raw img @ time: %f' % image.header.stamp.to_sec())
+        im_rect = cv2.remap(image.img, map_x, map_y, cv2.INTER_LINEAR)
+        plt.figure(4); plt.imshow(im_rect, cmap='gray', vmin=0, vmax=255); plt.title('undistorted andrectified img @ time: %f' % image.header.stamp.to_sec())
+        plt.show()
+
+        #plt.draw()
+        #plt.pause(0.1)
+        
+        image.release()
 
     return x_flow_dist, y_flow_dist, timestamps, Vs, Omegas
 

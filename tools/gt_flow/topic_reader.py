@@ -86,7 +86,7 @@ class ImageTopicReader(TopicReader):
             img = np.array(self.bridge.imgmsg_to_cv2(bag_msg.message))
         else:
             img = np.array(self.bridge.imgmsg_to_cv2(bag_msg.message))
-            img = img[..., [2, 1, 0]]
+            #img = img[..., [2, 1, 0]]
         return img, bag_msg.message.header
 
     def __getitem__(self, index):

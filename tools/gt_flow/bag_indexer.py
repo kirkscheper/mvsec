@@ -6,12 +6,12 @@ from __future__ import division
 import os
 import topic_reader
 import bisect
-try:
-    import rosbag
-    import cv_bridge
-    bridge = cv_bridge.CvBridge()
-except ImportError:
-    pass
+#try:
+import rosbag
+import cv_bridge
+bridge = cv_bridge.CvBridge()
+#except ImportError:
+#    pass
 import numpy as np
 
 class Stamp:
@@ -384,7 +384,7 @@ def compute_approximate_sync_positions(self, topics, max_milli_sec_diffs):
         positions[i + 1] = self.positions_of_topic[topic][indices]
         timestamps[i + 1] = self.timestamps_of_topic[topic][indices]
     print([len(ts) for ts in topic_timestamps], positions.shape)
-    self.set_sync_info(topics, max_milli_sec_diff, positions, timestamps, G)
+    self.set_sync_info(topics, max_milli_sec_diffs, positions, timestamps, G)
 
 
 def compute_exact_sync_positions(self, topics): 
